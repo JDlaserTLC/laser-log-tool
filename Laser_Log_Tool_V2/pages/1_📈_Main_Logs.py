@@ -125,7 +125,7 @@ def predict_failure_range(df, file_range_indices, target_val=18.0):
     m, c = np.polyfit(x_hours, y_volts, 1) 
 
     trend_type = "Rising" if m > 0 else "Falling"
-    debug_msg = f"{trend_type} ({m:.5f} V/hr) using files {file_range_indices[0]}-{file_range_indices[1]}"
+    debug_msg = f"{trend_type} ({m:.5f} W/hr) using files {file_range_indices[0]}-{file_range_indices[1]}"
 
     if m >= 0: return "Stable/Rising", None, debug_msg, window_start_time, window_end_time
     
@@ -163,14 +163,29 @@ def clear_data():
 full_df = st.session_state['main_logs_df']
 
 if full_df is None:
-    uploaded_file = st.file_uploader("Upload Zip File containing `log_*.txt`", type="zip")
+    # --- UPDATED UPLOADER LOGIC ---
+    uploaded_files = st.file_uploader(
+        "Upload Zip File OR individual `log_*.txt` files", 
+        type=["zip", "txt"], 
+        accept_multiple_files=True
+    )
     
-    if uploaded_file is not None:
+    if uploaded_files:
         st.info("Processing logs...")
         with tempfile.TemporaryDirectory() as tmp_dir:
-            with zipfile.ZipFile(uploaded_file, 'r') as zip_ref:
-                zip_ref.extractall(tmp_dir)
-                
+            
+            # UNPACKING LOOP: Handle Zips AND raw Text files
+            for file in uploaded_files:
+                if file.name.endswith(".zip"):
+                    # Extract zip contents to temp folder
+                    with zipfile.ZipFile(file, 'r') as zip_ref:
+                        zip_ref.extractall(tmp_dir)
+                else:
+                    # Save individual text file to temp folder
+                    with open(os.path.join(tmp_dir, file.name), "wb") as f:
+                        f.write(file.getbuffer())
+
+            # Now proceed exactly as before (glob all txts in the folder)
             all_files = sorted(glob.glob(os.path.join(tmp_dir, "**", "log_*.txt"), recursive=True))
             
             if not all_files:
@@ -221,15 +236,20 @@ else:
     file_range_selection = (1, count)
     
     if show_prediction:
-        start_def = max(1, count - 9)
-        file_range_selection = st.sidebar.slider(
-            "Select File Range for Trend:",
-            min_value=1,
-            max_value=count,
-            value=(start_def, count),
-            step=1,
-            help="Select the start and end file index to define the trend."
-        )
+        # Prevent Slider Error if only 1 file is loaded
+        if count > 1:
+            start_def = max(1, count - 9)
+            file_range_selection = st.sidebar.slider(
+                "Select File Range for Trend:",
+                min_value=1,
+                max_value=count,
+                value=(start_def, count),
+                step=1,
+                help="Select the start and end file index to define the trend."
+            )
+        else:
+            st.sidebar.info("Single file mode active.")
+            file_range_selection = (1, 1)
 
     # --- METRICS CALCULATION ---
     # Metrics run on full_df (which is pulled from session_state)
@@ -333,7 +353,7 @@ else:
 
             fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-            # 1. HIGHLIGHT BOX (Fixed Date Logic)
+            # 1. HIGHLIGHT BOX
             if show_prediction and hl_start and hl_end:
                 s_str = hl_start.strftime("%Y-%m-%d %H:%M:%S")
                 e_str = hl_end.strftime("%Y-%m-%d %H:%M:%S")
