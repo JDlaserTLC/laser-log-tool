@@ -269,7 +269,12 @@ else:
     all_events_list = []
     e_col = next((c for c in full_df.columns if 'event' in c.lower()), None)
     if e_col:
-        valid_events_df = full_df[~full_df[e_col].astype(str).isin(['0', '0.0', 'nan', ''])]
+        # 1. Drop true blanks first
+        valid_events_df = full_df[full_df[e_col].notna()].copy()
+        
+        # 2. Convert to string, make lowercase, strip spaces, and filter out fake blanks
+        valid_events_df = valid_events_df[~valid_events_df[e_col].astype(str).str.strip().str.lower().isin(['0', '0.0', 'nan', 'none', ''])]
+        
         for i, row in valid_events_df.iterrows():
             ts_str = row['Timestamp'].strftime('%d/%m/%Y %H:%M:%S')
             clean_code = str(row[e_col])
