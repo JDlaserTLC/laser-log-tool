@@ -113,7 +113,7 @@ def predict_failure_range(df, file_range_indices, target_val=18.0):
     if not cav_col: return "N/A", None, "No Cavity PD", None, None
 
     window_df = window_df.set_index('Timestamp').sort_index()
-    resampled_df = window_df[[cav_col]].resample('1H').mean().dropna()
+    resampled_df = window_df[[cav_col]].resample('1h').mean().dropna()
     
     if len(resampled_df) < 2: return "Insufficient Data", None, "Not enough points", None, None
 
